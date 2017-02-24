@@ -1,0 +1,172 @@
+include "global.tbh"
+include "I2C.tbh"
+
+
+
+'++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+'Global variables
+'++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+dim i2c_error as boolean
+
+
+'******************************************************************************
+'I2C Initalize IO pins for I2C
+'******************************************************************************
+sub I2C_Initalize
+
+	i2c_error = false						'clear error state
+
+	' Setup the Clock Line
+	io.num=SCL
+	io.state = HIGH
+	io.enabled=YES							'Enable as output
+
+	' Setup the Data Line
+	io.num=SDA
+	io.enabled=NO							'Enable as input
+	
+
+end sub
+'******************************************************************************
+'I2C Put char subrutine
+'******************************************************************************
+sub I2C_Write(vData as byte)
+
+	dim bitCnt as byte						'Bits counter	
+	dim CompVal as byte						'Value to compare - MASK
+	dim BitData as boolean					'Comparison result (1 or 0)
+	dim x as byte
+	
+	CompVal = &h80							'Initialize the MASK
+
+	io.num = SCL							'Select SCL line
+	io.state = LOW							'Initialize the transmition
+	
+	io.num = SDA							'Select SDA line
+	io.enabled=YES							'Set as output
+
+	for bitCnt = 0 to 7 step 1	
+
+		BitData = vData AND CompVal			'Define the state of the bit(MSB-->LSB)
+
+		CompVal = CompVal / 2				'Move the comparision to the next bit(MSB-->LSB)
+
+		if(BitData) then 
+			io.state = HIGH					'Bit is 1
+		else 
+			io.state = LOW					'Bit is 0
+		end if
+
+		io.num = SCL						'Write the bit to I2C device
+		io.state = HIGH
+		io.state = LOW
+
+		io.num = SDA						'Select SDA line, NOTE: this must be the last
+											'statement in the loop so we can release the SDA
+											'line as soon as possible to alow for the ack
+	next bitCnt								
+
+	io.enabled=NO							'Set SDA as input to allow ack receive
+
+	io.num = SCL							'Emulate the ACK frame
+	io.state = HIGH
+
+	io.num = SDA
+	if(io.state = HIGH) then				'See if we got an ack back from slave
+		i2c_error = TRUE
+	end if
+
+	io.num = SCL							'Finish the ACK frame
+	io.state = LOW
+
+end sub
+'******************************************************************************
+'I2C Get char function
+'******************************************************************************
+function I2C_Read(acknak_request as boolean) as byte
+
+	dim bitCnt as byte						'Bit counter
+	dim CompVal as byte						'Value to compare - MASK
+	
+
+	I2C_Read = 0
+	CompVal = &h80							'Initialize the MASK
+
+	io.num = SDA							'Select SDA line
+	io.enabled=NO							'Set as input
+
+	io.num = SCL							'Select SCL line
+	io.state = LOW							'Initialize the transmition
+	
+	for bitCnt = 0 to 7 step 1	
+
+		io.state = HIGH						'Read one bit from I2C device
+
+		io.num = SDA
+		if(io.state = HIGH) then			'Devine the state of the bit
+			I2C_Read = I2C_Read OR CompVal	'Store the value of the bit
+		end if
+
+		CompVal = CompVal / 2				'Move the comparision to the next bit(MSB-->LSB)			
+
+		io.num = SCL						
+		io.state = LOW						'Clear the clock line (the data can change now...)
+
+	next bitCnt								
+
+	io.num = SDA							'Select SDA line
+
+	if acknak_request = TRUE then			'Does user want to send an ack or not
+		io.state = LOW						'Bring Low for ACK
+		
+	else
+		io.state = HIGH						'Bring high for NACK
+	end if	
+
+
+	io.enabled=YES							'Enable SDA as output
+
+	io.num = SCL							'Select SCL line
+	io.state = HIGH							'Set SCL line
+	io.state = LOW							'Clear SCL line	
+
+
+
+end function
+'******************************************************************************
+'I2C Start frame
+'******************************************************************************
+sub I2C_Start
+	
+
+	io.num = SDA
+	io.state = HIGH							'Set SDA line
+	io.enabled=YES							'Enable as output
+
+
+	io.num = SCL
+	io.state = HIGH							'Set SCL line
+
+
+	io.num = SDA
+	io.state = LOW							'Clear SDA line
+
+end sub
+'******************************************************************************
+'I2C Stop frame
+'******************************************************************************
+sub I2C_Stop
+	
+	io.num = SDA	
+	io.state = LOW							'Clear SDA line
+	io.enabled=YES							'Enable as output
+
+	io.num = SCL
+	io.state = HIGH							'Set SCL line
+
+	io.num = SDA
+	io.state = HIGH							'Set SDA line
+	io.enabled=NO							'Enable as input
+	
+end sub

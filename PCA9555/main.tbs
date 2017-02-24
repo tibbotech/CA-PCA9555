@@ -1,0 +1,204 @@
+include "global.tbh"
+include "I2C.tbh"
+include "pca9555.tbh"
+
+
+'++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+'Global definitions
+'++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+dim slide as word
+dim up as boolean
+
+'++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+'Constants
+'++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+'=============================================================
+sub on_sys_init
+
+	
+	'Request buffer memory for the serial port
+	ser.num=0
+	ser.rxbuffrq(4)
+	ser.txbuffrq(4)
+	
+	
+	'Request buffer memory for the "data" socket
+	sock.num=0
+	sock.rxbuffrq(4)
+	sock.txbuffrq(4)
+	
+	sock.num=1
+	sock.rxbuffrq(1)
+	sock.txbuffrq(1)
+	sock.varbuffrq(1)
+	
+	'OK, now, actual buffer allocation
+	sys.buffalloc
+
+
+	'Setup IP params
+	net.ip="192.168.0.10"
+	net.gatewayip="192.168.0.1"
+	net.netmask="255.255.255.0"
+
+
+	
+	
+	'Setup the serial port
+	ser.num=0
+	ser.baudrate=ser.div9600/12 			'115200 <<<<<<<<<<<<<<<<<<< CHANGE AS NEEDED
+	ser.bits=PL_SER_BB_8					'<<<<<<<<<<<<<<<<<<<<<<<<< CHANGE AS NEEDED
+	ser.parity=PL_SER_PR_NONE				'<<<<<<<<<<<<<<<<<<<<<<<<< CHANGE AS NEEDED
+	ser.flowcontrol=DISABLED				'<<<<<<<<<<<<<<<<<<<<<<<<< CHANGE AS NEEDED
+	ser.interface=PL_SER_SI_FULLDUPLEX		'<<<<<<<<<<<<<<<<<<<<<<<<< CHANGE AS NEEDED
+	ser.enabled=YES
+	
+	'Setup for the main "data" socket
+	sock.num=0
+	sock.protocol=PL_SOCK_PROTOCOL_TCP					'<<<<<<<<<<<<<<<<<<<<<<<<< CHANGE AS NEEDED
+	sock.inconmode=PL_SOCK_INCONMODE_ANY_IP_ANY_PORT	'<<<<<<<<<<<<< CHANGE AS NEEDED
+	sock.reconmode=PL_SOCK_RECONMODE_0					'<<<<<<<<<<<<<<<<<<<<<<<<< CHANGE AS NEEDED
+	sock.localportlist="23"								'<<<<<<<<<<<<<<<<<<<<<<<<< CHANGE AS NEEDED
+	
+	'Setup for HTTP sockets
+	sock.num=1
+	sock.protocol=PL_SOCK_PROTOCOL_TCP
+	sock.inconmode=PL_SOCK_INCONMODE_ANY_IP_ANY_PORT
+	sock.reconmode=PL_SOCK_RECONMODE_0
+	sock.httpportlist="80"
+	
+
+	'Set the timer for 10ms 
+	sys.onsystimerperiod = 4
+
+	'TO DO: put the rest of your initialization code here
+	'<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+	slide =1
+	up =true
+	
+	
+	'Initalize I2C port pins
+	I2C_Initalize
+
+	ser.setdata("System is Up" + CRLF)
+	ser.send
+	
+
+	'Initalize first PCA part
+	'<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+	Init_PCA9555(2,0,0)	
+	
+	if i2c_error = false then
+		ser.setdata("PCA9555 Found" + CRLF)
+		ser.send
+	else
+		ser.setdata("PCA9555 Not Found" + CRLF)
+		ser.send
+	end if		
+	
+	
+	'Initalize Second PCA part
+	'<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+	Init_PCA9555(0,255,255)
+	
+	if i2c_error = false then
+		ser.setdata("PCA9555 Found" + CRLF)
+		ser.send
+	else
+		ser.setdata("PCA9555 Not Found" + CRLF)
+		ser.send
+	end if
+
+	
+end sub
+'=============================================================
+sub on_sys_timer
+
+	dim s as string
+	dim z as word
+	
+	z = Read_PCA9555(0)
+
+	z = z XOR &hFFFF
+	
+	s = str(z)
+	
+	ser.setdata(s + CRLF)
+	ser.send
+
+	
+	if up = true then
+	
+		slide = slide * 2
+
+		if slide = &h8000 then
+
+			up = false
+
+		end if
+
+	else
+		slide = slide / 2
+		
+		if slide = &h0001 then
+
+			up = true
+
+		end if
+
+	end if		
+	
+	Write_PCA9555(2,slide)
+
+
+end sub
+
+'=============================================================
+sub on_sock_event(newstate as pl_sock_state, newstatesimple as pl_sock_state_simple)
+'This event is generated whenever socket status changes. We are only using a single socket (#0) so
+'we can be sure that this event is related to it.
+
+	select case sock.statesimple
+	
+	case PL_SSTS_PO
+		ser.setdata("Connection Established" + CRLF)
+		ser.send
+
+
+	case PL_SSTS_PC
+		ser.setdata("Connection Droped" + CRLF)
+		ser.send
+
+
+	end select 
+
+
+end sub
+
+
+'=============================================================
+sub on_sock_data_arrival
+'This event is generated whenever there is an incoming TCP data to process.
+'All arriving TCP data is sent out through the serial port.
+	dim s as string
+	
+	
+	'You may feel that the code below is a bit cryptic but, actually, it is very simple!
+	'We use sock.getdata() to extract a portion of data from the socket's RX buffer. We plan
+	'to put this data into the TX buffer of the serial port. Therefore, we should be mindful
+	'of the free space in the TX buffer. We only extract as much data from the RX buffer
+	'of the socket as available free space in the TX buffer of the serial port. This is achieved
+	'through the use of the ser.txfree property. The ser.setdata() method stores the data into
+	'the TX buffer of the serial port.
+	
+	' must be done this way becase once you get the data it clears the buffer 
+	s = sock.getdata(ser.txfree)		
+		
+'	sock.setdata(s)
+'	sock.send
+
+	
+end sub

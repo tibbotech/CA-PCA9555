@@ -1,0 +1,5 @@
+'This file is for global definitions (that is, if you gonna have any)
+
+const CRLF = CHR(13) + CHR(10)
+
+

@@ -1,0 +1,23 @@
+'++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+'Global variables
+'++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+declare i2c_error as boolean
+
+'------------------------------------------------------------------------------
+'Pins definition
+const SDA=			PL_IO_NUM_47
+const SCL=			PL_IO_NUM_48
+const ACK  = TRUE
+const NACK = FALSE
+
+'------------------------------------------------------------------------------
+'Function/Subrutines declaration
+
+declare sub I2C_Initalize
+declare sub I2C_Write(vData as byte)
+declare function I2C_Read(acknak_request as boolean) as byte
+declare sub I2C_Start
+declare sub I2C_Stop
+
+

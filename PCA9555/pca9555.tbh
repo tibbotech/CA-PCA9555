@@ -1,0 +1,10 @@
+
+const PCA9555_MANUF_WRITE_CODE = 	&h40				' Manufacturer address code for write
+const PCA9555_MANUF_READ_CODE = 	&h41				' Manufacturer address code for read
+
+
+declare sub Init_PCA9555(address as byte, port0 as byte, port1 as byte)
+declare sub Write_PCA9555(address as byte, port_data as word)
+declare function Read_PCA9555(address as byte) as word
+
+

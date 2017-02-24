@@ -1,0 +1,81 @@
+include "global.tbh"
+include "I2C.tbh"
+include "pca9555.tbh"
+
+
+'*********************************************************************
+'************************  INITIALIZE PCA9554  ***********************
+'*********************************************************************
+sub Init_PCA9555(address as byte, port0 as byte, port1 as byte)
+'   // 0 = ouput; 1 = input
+	i2c_error = FALSE								'clear error status for new write
+ 
+	I2C_Start 
+	
+	I2C_Write(address + PCA9555_MANUF_WRITE_CODE)
+	
+	I2C_Write(&h06)	 
+	I2C_Write(port0) 
+	I2C_Write(port1) 
+	I2C_Stop 
+
+end sub
+'*********************************************************************
+'***************************  WRITE PCA 9555  ************************
+'*********************************************************************
+sub Write_PCA9555(address as byte, port_data as word)
+
+	i2c_error = FALSE								'clear error status for new write
+
+	I2C_Start 
+	
+	I2C_Write(address + PCA9555_MANUF_WRITE_CODE)
+	
+	I2C_Write(&h02)	 								' Send Port Command
+
+	I2C_Write(port_data AND &h00ff) 				' Send Port 0
+	I2C_Write(port_data / &hff)						' Send Port 1 
+	I2C_Stop 
+
+	if i2c_error = TRUE then						'check global variable if error detected
+		ser.setdata("PCA9555 Write Error!!!" + CRLF)
+		ser.send
+	end if		
+
+
+
+
+end sub 
+'*********************************************************************
+'****************************  READ PCA9555  *************************
+'*********************************************************************
+function Read_PCA9555(address as byte) as word
+	
+
+	i2c_error = FALSE								'clear error status for new write
+
+	I2C_Start 
+	
+	I2C_Write(address + PCA9555_MANUF_WRITE_CODE)	
+	
+	I2C_Write(&h00)	 								'send port 0 command
+                                            
+   	I2C_Start									
+   	I2C_Write(address + PCA9555_MANUF_READ_CODE)		'send read
+    
+   	
+	Read_PCA9555 = I2C_Read(ACK)					'Read first byte with ack
+
+	Read_PCA9555 = Read_PCA9555 * 256				'Shift up one byte
+
+	Read_PCA9555 = Read_PCA9555 + I2C_Read(NACK)	'Read second byte with nack then add 
+
+	I2C_Stop 
+
+	if i2c_error = TRUE then						'check global variable if error detected
+		ser.setdata("PCA9555 Read Error!!!" + CRLF)
+		ser.send
+	end if		
+
+end function
+
